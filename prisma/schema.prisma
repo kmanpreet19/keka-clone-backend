@@ -11,3 +11,279 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+// ==========================
+// ENUMS
+// ==========================
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  MANAGER
+  EMPLOYEE
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  HALF_DAY
+  LEAVE
+}
+
+enum LeaveType {
+  CASUAL
+  SICK
+  PAID
+  UNPAID
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ==========================
+// ORGANIZATION
+// ==========================
+
+model Organization {
+  id     String  @id @default(uuid())
+  name   String
+  domain String? @unique
+
+  users        User[]
+  departments  Department[]
+  designations Designation[]
+  invitations  Invitation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ==========================
+// USER (AUTH)
+// ==========================
+
+model User {
+  id       String  @id @default(uuid())
+  email    String  @unique
+  password String
+  role     Role
+  isActive Boolean @default(true)
+
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
+  employee  Employee?
+  approvals Approval[] @relation("ApprovedByUser")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ==========================
+// DEPARTMENT
+// ==========================
+
+model Department {
+  id             String @id @default(uuid())
+  name           String
+  organizationId String
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  employees    Employee[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, organizationId])
+}
+
+// ==========================
+// DESIGNATION
+// ==========================
+
+model Designation {
+  id             String @id @default(uuid())
+  title          String
+  organizationId String
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  employees    Employee[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([title, organizationId])
+}
+
+// ==========================
+// EMPLOYEE (CORE HR ENTITY)
+// ==========================
+
+model Employee {
+  id           String @id @default(uuid())
+  employeeCode String @unique
+  fullName     String
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
+
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+
+  designationId String?
+  designation   Designation? @relation(fields: [designationId], references: [id])
+
+  managerId    String?
+  manager      Employee?  @relation("EmployeeManager", fields: [managerId], references: [id])
+  subordinates Employee[] @relation("EmployeeManager")
+
+  attendances Attendance[]
+  leaves      LeaveRequest[]
+  payrolls    Payroll[]
+  reports     Report[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ==========================
+// INVITATION
+// ==========================
+
+model Invitation {
+  id        String           @id @default(uuid())
+  email     String
+  token     String           @unique
+  role      Role
+  status    InvitationStatus @default(PENDING)
+  expiresAt DateTime
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ==========================
+// ATTENDANCE
+// ==========================
+
+model Attendance {
+  id     String           @id @default(uuid())
+  date   DateTime
+  status AttendanceStatus
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id])
+
+  editableUntil    DateTime
+  requiresApproval Boolean  @default(false)
+
+  approval Approval?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([employeeId, date])
+}
+
+// ==========================
+// LEAVE MANAGEMENT
+// ==========================
+
+model LeaveRequest {
+  id       String      @id @default(uuid())
+  fromDate DateTime
+  toDate   DateTime
+  type     LeaveType
+  status   LeaveStatus @default(PENDING)
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id])
+
+  editableUntil DateTime
+  approval      Approval?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ==========================
+// PAYROLL
+// ==========================
+
+model Payroll {
+  id         String @id @default(uuid())
+  month      Int
+  year       Int
+  baseSalary Float
+  deductions Float
+  netSalary  Float
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id])
+
+  isLocked Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([employeeId, month, year])
+}
+
+// ==========================
+// REPORTS (Editable for 7 Days)
+// ==========================
+
+model Report {
+  id      String @id @default(uuid())
+  title   String
+  content String
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id])
+
+  editableUntil    DateTime
+  requiresApproval Boolean  @default(false)
+
+  approval Approval?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ==========================
+// APPROVAL SYSTEM (GENERIC)
+// ==========================
+
+model Approval {
+  id String @id @default(uuid())
+
+  approvedById String?
+  approvedBy   User?   @relation("ApprovedByUser", fields: [approvedById], references: [id])
+
+  attendanceId String?     @unique
+  attendance   Attendance? @relation(fields: [attendanceId], references: [id])
+
+  leaveId String?       @unique
+  leave   LeaveRequest? @relation(fields: [leaveId], references: [id])
+
+  reportId String? @unique
+  report   Report? @relation(fields: [reportId], references: [id])
+}
