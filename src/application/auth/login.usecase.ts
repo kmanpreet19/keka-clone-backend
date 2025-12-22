@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+import e from 'express';
 
 @Injectable()
 export class LoginUseCase {
@@ -27,15 +28,25 @@ export class LoginUseCase {
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
+   
 
     const payload = {
-      sub: user.id,
+      id: user.id,
       role: user.role,
+      email: user.email,
       organizationId: user.organizationId,
     };
+    console.log('LOGIN USER ID:', user.id);
+
+    console.log('LOGIN USER FROM DB:', user);
+    console.log('JWT PAYLOAD:---', payload);
+
 
     return {
       accessToken: this.jwtService.sign(payload),
     };
   }
 }
+
+
+
